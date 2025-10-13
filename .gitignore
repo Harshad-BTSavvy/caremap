@@ -34,3 +34,9 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# fhir excludes
+.fhir-packages/
+**/http-client.ts
+tmp/
+**/resources/tsconfig.json
