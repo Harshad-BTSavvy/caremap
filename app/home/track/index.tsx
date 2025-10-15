@@ -28,7 +28,7 @@ export default function TrackScreen() {
 
   const [currentSelectedDate, setCurrentSelectedDate] = useState(moment());
   //marking dates on calendar
-const [markedDates, setMarkedDates] = useState<string[]>([]);
+  const [markedDates, setMarkedDates] = useState<string[]>([]);
   useEffect(() => {
     const formatted = currentSelectedDate.format("MM-DD-YYYY");
     if (selectedDate !== formatted) {
@@ -50,12 +50,11 @@ const [markedDates, setMarkedDates] = useState<string[]>([]);
         );
         setCategories(res);
         setRefreshData(false);
-         // 👇 collect all dates that have data (assuming API gives it or you can derive it)
-      const datesWithData = res
-        .filter((cat) => cat.items.length > 0)
-        .map((cat) => currentSelectedDate.format("YYYY-MM-DD")); // adjust format if API gives date
-      setMarkedDates(datesWithData);
-    
+        // 👇 collect all dates that have data (assuming API gives it or you can derive it)
+        const datesWithData = res
+          .filter((cat) => cat.items.length > 0)
+          .map((cat) => currentSelectedDate.format("YYYY-MM-DD")); // adjust format if API gives date
+        setMarkedDates(datesWithData);
       };
 
       loadTrackItemsForSelectedDate();
@@ -76,7 +75,8 @@ const [markedDates, setMarkedDates] = useState<string[]>([]);
         right={
           <TouchableOpacity onPress={handleAddItem} className="px-2">
             <Text className="text-white font-medium whitespace-nowrap">
-               Add item
+              {/* {categories.some((cat) => cat.items.length > 0) ? "Edit item" : "Add item"} */}
+              Add Item
             </Text>
           </TouchableOpacity>
         }
@@ -109,10 +109,8 @@ const [markedDates, setMarkedDates] = useState<string[]>([]);
 
                 {/* Items under this category */}
                 {cat.items.map((itm) => (
-                  
                   <TrackCard
-                  
-                  summaries={itm.summaries ?? []} 
+                    summaries={itm.summaries ?? []}
                     key={itm.item.id}
                     item_id={itm.item.id}
                     entry_id={itm.entry_id}
@@ -120,7 +118,7 @@ const [markedDates, setMarkedDates] = useState<string[]>([]);
                     completed={itm.completed}
                     total={itm.total}
                     date={currentSelectedDate.format("MM-DD-YYYY")}
-                    />
+                  />
                 ))}
               </View>
             ) : null

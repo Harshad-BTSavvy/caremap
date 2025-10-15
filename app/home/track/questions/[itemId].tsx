@@ -1,3 +1,4 @@
+
 import Header from "@/components/shared/Header";
 import QuestionRenderer from "@/components/shared/track-shared-components/QuestionRenderer";
 import { useCustomToast } from "@/components/shared/useCustomToast";
@@ -17,7 +18,7 @@ import {
 import { ROUTES } from "@/utils/route";
 import palette from "@/utils/theme/color";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useMemo } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -35,41 +36,76 @@ export default function QuestionFlowScreen() {
   const { setRefreshData } = useContext(TrackContext);
 
   const [questions, setQuestions] = useState<Question[]>([]);
-
   const [responseOptions, setResponseOptions] = useState<ResponseOption[]>([]);
-
-  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
-  const [currentOptions, setCurrentOptions] = useState<ResponseOption[]>([]);
-
-  const itemIdNum = Number(itemId);
-  const entryIdNum = Number(entryId);
-
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, any>>({});
   const [customOptions, setCustomOptions] = useState<Record<number, string>>(
     {}
   );
 
-  // Compute visibleQuestions dynamically (no separate state needed)
-  const visibleQuestions = questions.filter((q) =>
-    isQuestionVisible(q, answers, questions, responseOptions)
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const itemIdNum = Number(itemId);
+  const entryIdNum = Number(entryId);
+
+  // Compute visibleQuestions dynamically
+  const visibleQuestions = useMemo(() => {
+    return questions.filter((q) =>
+      isQuestionVisible(q, answers, questions, responseOptions)
+    );
+  }, [questions, answers, responseOptions]);
+
+  // Keep currentQuestion in sync with visibleQuestions + currentIndex
+  const currentQuestion = visibleQuestions[currentIndex] || null;
+  const currentOptions = responseOptions.filter(
+    (r) => r.question_id === currentQuestion?.id
   );
 
-  // isLast now checks against last visible question, not total questions
+  // isLast checks against last visible question
   const isLast =
     currentQuestion &&
-    visibleQuestions?.length > 0 &&
+    visibleQuestions.length > 0 &&
     visibleQuestions[visibleQuestions.length - 1]?.id === currentQuestion.id;
 
+  const hasAnswer =
+    currentQuestion &&
+    answers[currentQuestion.id] !== undefined &&
+    answers[currentQuestion.id] !== null;
+
+  // Cleanup hidden answers automatically
   useEffect(() => {
-  if (!user) {
-    router.replace(ROUTES.LOGIN);
-    return;
-  }
-  if (!patient) {
-    router.replace(ROUTES.MY_HEALTH);
-    return;
-  }
+    setAnswers((prev) => {
+      const newAnswers = { ...prev };
+      let changed = false;
+
+      questions.forEach((q) => {
+        const stillVisible = visibleQuestions.some((vq) => vq.id === q.id);
+        if (!stillVisible && newAnswers[q.id] !== undefined) {
+          delete newAnswers[q.id];
+          changed = true;
+        }
+      });
+
+      // ✅ only return a new object if something actually changed
+      return changed ? newAnswers : prev;
+    });
+
+    if (
+      currentIndex >= visibleQuestions.length &&
+      visibleQuestions.length > 0
+    ) {
+      setCurrentIndex(visibleQuestions.length - 1);
+    }
+  }, [visibleQuestions, questions, currentIndex]);
+
+  useEffect(() => {
+    if (!user) {
+      router.replace(ROUTES.LOGIN);
+      return;
+    }
+    if (!patient) {
+      router.replace(ROUTES.MY_HEALTH);
+      return;
+    }
 
     const loadQuestionsWithOptions = async () => {
       if (!itemIdNum) return;
@@ -78,11 +114,12 @@ export default function QuestionFlowScreen() {
         entryIdNum
       );
 
-    const questionsArray = questionWithOptions.map((qwo) => qwo.question);
-    const responseOptionsArray = questionWithOptions.flatMap((qwo) => qwo.options);
+      const questionsArray = questionWithOptions.map((qwo) => qwo.question);
+      const responseOptionsArray = questionWithOptions.flatMap(
+        (qwo) => qwo.options
+      );
 
-    const existingResponses: Record<number, any> = {};
-
+      const existingResponses: Record<number, any> = {};
       questionWithOptions.forEach((qwo) => {
         const response = qwo.existingResponse;
         if (response && response.question_id != null) {
@@ -94,14 +131,7 @@ export default function QuestionFlowScreen() {
           }
           existingResponses[response.question_id] = answerValue;
         }
-      })
-      // --------------------------------------------------------------------------------------
-      // NOTE:
-      // The frontend should use the `existingResponses` object of type Record<number, any>
-      // to populate the UI with previously submitted respon`ses. This can be done by either:
-      //   - Calling setAnswers(existingResponses), or
-      //   - Using an alternative implementation to render the data as needed.
-      // --------------------------------------------------------------------------------------
+      });
 
       setQuestions(questionsArray);
       setResponseOptions(responseOptionsArray);
@@ -111,53 +141,32 @@ export default function QuestionFlowScreen() {
     loadQuestionsWithOptions();
   }, [itemIdNum]);
 
-  useEffect(() => {
-    if (questions.length > 0) {
-      const itemQuestions = questions.filter((q) => q.item_id === itemIdNum);
-      const currentQ = itemQuestions[currentIndex] || null;
-      const optionsForCurrent = responseOptions.filter(
-        (r) => r.question_id === currentQ?.id
-      );
-
-      setCurrentQuestion(currentQ);
-      setCurrentOptions(optionsForCurrent);
-    }
-  }, [questions, responseOptions, currentIndex, itemIdNum]);
-
-  // Answer setter (used by QuestionRenderer)
+  // Answer setter
   const handleSetAnswer = (val: any) => {
-    if (!currentQuestion || !currentQuestion.id) return;
-    setAnswers((prev) => ({ ...prev, [currentQuestion?.id]: val }));
+    if (!currentQuestion?.id) return;
+    setAnswers((prev) => ({ ...prev, [currentQuestion.id]: val }));
   };
 
-  // Custom option adder (used by QuestionRenderer for MSQ question type)
+  // Custom option adder
   const handleAddOption = (question_id: number, newOption: string) => {
     setCustomOptions((prev) => ({ ...prev, [question_id]: newOption }));
   };
 
   const submitAnswers = async (responseObj: Record<number, any>) => {
-    if (!user?.id) throw new Error("Authentication ERROR");
-    if (!patient?.id) throw new Error("Authentication ERROR");
+    if (!user?.id || !patient?.id) throw new Error("Authentication ERROR");
 
     try {
       for (const [questionIdStr, answerObj] of Object.entries(responseObj)) {
         const questionId = Number(questionIdStr);
 
-        if (answerObj === null || answerObj === undefined) {
-          // Skip saving if no answer
-          continue;
-        }
+        if (answerObj === null || answerObj === undefined) continue;
 
-        // Handle custom options before saving response
+        // Add custom option if needed
         for (const [customQuesIdStr, customVal] of Object.entries(
           customOptions
         )) {
           const customQuesId = Number(customQuesIdStr);
-
           if (JSON.stringify(answerObj).includes(customVal)) {
-            console.log(
-              `Adding new option '${customVal}' for question id: ${customQuesId}`
-            );
             await addOptionToQuestion(customQuesId, customVal);
           }
         }
@@ -169,20 +178,15 @@ export default function QuestionFlowScreen() {
           user.id,
           patient.id
         );
-        console.log(`Answer saved for question ${questionId}`);
       }
-
-      console.log("All answers saved successfully.");
     } catch (error) {
       console.error("Error saving answers:", error);
     }
   };
 
   const handleNext = async () => {
-    // check required
     if (
-      currentQuestion &&
-      currentQuestion.required &&
+      currentQuestion?.required &&
       (answers[currentQuestion.id] === undefined ||
         answers[currentQuestion.id] === null)
     ) {
@@ -193,10 +197,7 @@ export default function QuestionFlowScreen() {
       return;
     }
 
-    //compute answered count BEFORE navigating
-
     if (isLast) {
-      // mark fully completed (ensure completed === total)
       await submitAnswers(answers);
       router.back();
       setRefreshData(true);
@@ -207,7 +208,6 @@ export default function QuestionFlowScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      {/* Header */}
       <Header
         title={itemName}
         right={
@@ -217,7 +217,6 @@ export default function QuestionFlowScreen() {
         }
       />
 
-      {/* Content */}
       {!currentQuestion ? (
         <View className="flex-1 justify-center items-center px-4">
           <Text className="text-gray-500 text-center">
@@ -226,9 +225,8 @@ export default function QuestionFlowScreen() {
         </View>
       ) : (
         <>
-          {/* Scrollable area */}
           <ScrollView
-            contentContainerStyle={{ padding: 20, paddingBottom: 100 }} // extra bottom padding so content doesn't hide under buttons
+            contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
           >
             {currentQuestion.instructions && (
               <Text className="text-base text-gray-600 mb-2">
@@ -241,15 +239,12 @@ export default function QuestionFlowScreen() {
               answer={answers[currentQuestion.id]}
               setAnswer={handleSetAnswer}
               responses={currentOptions}
-              // To add custom options for MSQ type questions
               setCustomOption={handleAddOption}
             />
           </ScrollView>
 
-          {/* Fixed bottom buttons */}
           <View className="flex-row p-4 border-t border-gray-200 bg-white">
-            {/* Skip */}
-            {!currentQuestion.required && !isLast && (
+            {!currentQuestion.required && !isLast && !hasAnswer && (
               <TouchableOpacity
                 className="flex-1 py-3 rounded-lg border border-gray-300 mr-2"
                 onPress={() => {
@@ -257,7 +252,6 @@ export default function QuestionFlowScreen() {
                     ...prev,
                     [currentQuestion.id]: null,
                   }));
-
                   setCurrentIndex((p) => p + 1);
                 }}
               >
@@ -267,7 +261,6 @@ export default function QuestionFlowScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Next/Submit */}
             <TouchableOpacity
               style={{ backgroundColor: palette.primary }}
               className="flex-1 py-3 rounded-lg"

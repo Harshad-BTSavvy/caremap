@@ -1,3 +1,4 @@
+import { CustomButton } from "@/components/shared/CustomButton";
 import Header from "@/components/shared/Header";
 import { CheckIcon, Icon } from "@/components/ui/icon";
 import { PatientContext } from "@/context/PatientContext";
@@ -9,10 +10,18 @@ import {
   getAllCategoriesWithSelectableItems,
   removeTrackItemFromDate,
 } from "@/services/core/TrackService";
+
 import { ROUTES } from "@/utils/route";
 import palette from "@/utils/theme/color";
-import { useRouter } from "expo-router";
-import React, { useContext, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter } from "expo-router";
+import React, {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -21,7 +30,8 @@ export default function AddItem() {
 
   const { user } = useContext(UserContext);
   const { patient } = useContext(PatientContext);
-  const { selectedDate, setRefreshData } = useContext(TrackContext);
+  const { selectedDate, setRefreshData, refreshData } =
+    useContext(TrackContext);
   const [selectableCategories, setSelectableCategories] = useState<
     TrackCategoryWithSelectableItems[]
   >([]);
@@ -29,9 +39,21 @@ export default function AddItem() {
     []
   );
   const initialCategoriesRef = useRef<TrackCategoryWithSelectableItems[]>([]);
-
   const [isLoading, setIsLoading] = useState(false);
 
+  const loadSelectableItems = useCallback(async () => {
+    if (!user || !patient) return;
+    const res = await getAllCategoriesWithSelectableItems(
+      patient.id,
+      selectedDate
+    );
+    selectableCategoriesRef.current = res;
+    initialCategoriesRef.current = res;
+    setSelectableCategories(res);
+    if (refreshData) setRefreshData(false);
+  }, [user, patient, selectedDate, refreshData, setRefreshData]);
+
+  // Initial load & refresh trigger
   useEffect(() => {
     if (!user) {
       router.replace(ROUTES.LOGIN);
@@ -41,19 +63,15 @@ export default function AddItem() {
       router.replace(ROUTES.MY_HEALTH);
       return;
     }
-
-    const loadSelectableItems = async () => {
-      const res = await getAllCategoriesWithSelectableItems(
-        patient.id,
-        selectedDate
-      );
-
-      selectableCategoriesRef.current = res;
-      initialCategoriesRef.current = res;
-      setSelectableCategories(res);
-    };
     loadSelectableItems();
-  }, [patient, selectedDate]);
+  }, [user, patient, selectedDate, refreshData, loadSelectableItems]);
+
+  // Ensure list refreshes when returning from manage custom goals screen
+  useFocusEffect(
+    useCallback(() => {
+      loadSelectableItems();
+    }, [loadSelectableItems])
+  );
 
   const toggleSelect = (categoryIndex: number, itemIndex: number) => {
     setSelectableCategories((prev) => {
@@ -117,14 +135,14 @@ export default function AddItem() {
       initialCategoriesRef.current = selectableCategoriesRef.current;
 
       setRefreshData(true);
-      router.back();
+      router.navigate("/home/track");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <SafeAreaView edges={["right", "top", "left"]} className="flex-1 bg-white">
       <Header
         title="Select care items to track"
         right={
@@ -133,7 +151,7 @@ export default function AddItem() {
           </TouchableOpacity>
         }
       />
-      <ScrollView contentContainerClassName="px-4 pb-12 pt-5">
+      <ScrollView contentContainerClassName="px-4 pb-40 pt-5">
         {selectableCategories.map((categoryGroup, categoryIndex) => (
           <View key={categoryGroup.category.id} className="mb-6">
             <Text
@@ -146,35 +164,67 @@ export default function AddItem() {
               <TouchableOpacity
                 key={itemObj.item.id}
                 onPress={() => toggleSelect(categoryIndex, itemIndex)}
-                className={`flex-row items-center justify-between border rounded-xl py-3 px-4 mb-2 
-                  ${
-                    itemObj.selected
-                      ? "bg-cyan-100 border-cyan-400"
-                      : "bg-gray-100 border-gray-300"
-                  }`}
+                className={`flex-row items-center justify-between border rounded-xl py-3 px-4 mb-2
+    ${
+      itemObj.selected
+        ? "bg-cyan-100 border-cyan-400"
+        : "bg-gray-100 border-gray-300"
+    }
+  `}
               >
-                <Text className="text-[15px]">{itemObj.item.name}</Text>
-                {itemObj.selected && (
-                  <Icon
-                    as={CheckIcon}
-                    size="xl"
-                    style={{ color: palette.primary }}
-                  />
-                )}
+                {/* Left: item name */}
+                <Text className="text-[15px] flex-1">{itemObj.item.name}</Text>
+
+                {/* Right: frequency + check icon */}
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-sm text-gray-700">
+                    {itemObj.item.frequency}
+                  </Text>
+                  {itemObj.selected ? (
+                    <Icon
+                      as={CheckIcon}
+                      size="xl"
+                      style={{ color: palette.primary }}
+                    />
+                  ) : (
+                    // invisible placeholder to keep space fixed
+                    <View style={{ width: 24, height: 24 }} />
+                  )}
+                </View>
               </TouchableOpacity>
             ))}
           </View>
         ))}
-
-        <TouchableOpacity
-          onPress={handleSave}
-          disabled={isLoading}
-          style={{ backgroundColor: palette.primary }}
-          className="rounded-lg py-3 items-center"
-        >
-          <Text className="text-white font-bold text-[16px]">Save</Text>
-        </TouchableOpacity>
       </ScrollView>
+      <View className="bg-white absolute bottom-0 left-0 right-0 px-4 py-4 border-t border-gray-200">
+        {selectableCategories.some(
+          (categoryGroup) =>
+            categoryGroup.category.name === "Custom" &&
+            categoryGroup.items.length > 0
+        ) ? (
+          // If there is at least 1 custom goal → show Manage button
+          <TouchableOpacity
+            onPress={() => router.push("/home/track/manageCustomGoals")}
+            className="flex-row items-center justify-center border border-dashed border-gray-400 rounded-xl py-3 px-4 mb-3"
+          >
+            <Text className="text-cyan-600 font-semibold">
+              Manage Custom Goals
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          // Otherwise → default Add button
+          <TouchableOpacity
+            onPress={() => router.push(ROUTES.TRACK_CUSTOM_GOALS)}
+            className="flex-row items-center justify-center border border-dashed border-gray-400 rounded-xl py-3 px-4 mb-3"
+          >
+            <Text className="text-cyan-600 font-semibold">
+              + Add Custom Goal
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        <CustomButton onPress={handleSave} disabled={isLoading} title="Save" />
+      </View>
     </SafeAreaView>
   );
 }

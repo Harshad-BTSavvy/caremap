@@ -63,7 +63,45 @@ export interface CustomGoalParams {
   userId: string;
   patientId: number;
   date: string;
-  frequency: "daily" | "weekly" | "monthly";
+  frequency: TrackingFrequency;
   code: string;
   questions: CustomGoalQuestion[];
+}
+
+// Insights module types
+export interface InsightTopicRequest {
+  patientId: string;
+}
+
+export interface InsightTopicResponse {
+  insightName: string;
+  insightKey: string;
+}
+
+// Date-based insights types
+export interface DateBasedInsightRequest {
+  patientId: string;
+  selectedDate: string;
+  insightKey: string;
+  questionCode: string;
+}
+
+export interface InsightDataPoint {
+  label: string;
+  date: string;
+  value: number;
+}
+
+export interface InsightSeries {
+  questionId: number;
+  transform: string;
+  topicId: number;
+  topic: string;
+  data: InsightDataPoint[];
+}
+
+export interface DateBasedInsightResponse {
+  startDate: string;
+  endDate: string;
+  series: InsightSeries[];
 }
