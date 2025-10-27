@@ -13,7 +13,7 @@ export const up = async (db: SQLiteDatabase) => {
     CREATE TABLE IF NOT EXISTS ${tables.SYNC_PATIENT_DATA} (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       patient_fhir_id TEXT NOT NULL UNIQUE,
-      last_synced_at TEXT,
+      last_synced_date TEXT,
       status INTEGER NOT NULL DEFAULT 0,
       created_date TEXT NOT NULL DEFAULT (datetime('now')),
       updated_date TEXT NOT NULL DEFAULT (datetime('now'))
@@ -260,7 +260,7 @@ export const up = async (db: SQLiteDatabase) => {
     CREATE TABLE IF NOT EXISTS ${tables.TRACK_CONFIG_VERSION} (
       module TEXT PRIMARY KEY,     -- e.g., 'track'
       version INTEGER NOT NULL DEFAULT 0,    -- version number from config
-      last_synced_at TEXT          -- ISO timestamp when last sync happened
+      last_synced_date TEXT          -- ISO timestamp when last sync happened
     );
 
     CREATE TABLE IF NOT EXISTS ${tables.CONTACT} (

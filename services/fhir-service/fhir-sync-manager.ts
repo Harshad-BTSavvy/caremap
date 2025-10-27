@@ -13,7 +13,7 @@ export const shouldSync = async (patientFhirId: string): Promise<boolean> => {
 
     const syncPatientDataModel = new SyncPatientDataModel();
     useModel(syncPatientDataModel, async (model) => {
-        lastSyncedAt = await model.getFirstByFields({ patient_fhir_id: patientFhirId }).then((data: { last_synced_at: any; }) => data?.last_synced_at);
+        lastSyncedAt = await model.getFirstByFields({ patient_fhir_id: patientFhirId }).then((data: { last_synced_date: any; }) => data?.last_synced_date);
     });
 
     if (!lastSyncedAt) return true; // never synced before
@@ -32,7 +32,7 @@ export const updateSyncStatus = async (
         const existing = await model.getFirstByFields({ patient_fhir_id: patientFhirId });
         if (existing) {
             await model.updateByFields({
-                last_synced_at: new Date().toISOString(),
+                last_synced_date: new Date().toISOString(),
                 status: status ? 1 : 0,
                 updated_date: new Date().toISOString(),
             }, {
@@ -41,7 +41,7 @@ export const updateSyncStatus = async (
         } else {
             await model.insert({
                 patient_fhir_id: patientFhirId,
-                last_synced_at: new Date().toISOString(),
+                last_synced_date: new Date().toISOString(),
                 status: status ? 1 : 0,
                 created_date: new Date().toISOString(),
                 updated_date: new Date().toISOString()

@@ -18,9 +18,9 @@ export async function updateStoredVersion(
 ): Promise<void> {
     await useDB(async (db) => {
         await db.runAsync(
-            `INSERT INTO TRACK_CONFIG_VERSION (module, version, last_synced_at)
+            `INSERT INTO TRACK_CONFIG_VERSION (module, version, last_synced_date)
        VALUES (?, ?, ?)
-       ON CONFLICT(module) DO UPDATE SET version = excluded.version, last_synced_at = excluded.last_synced_at;`,
+       ON CONFLICT(module) DO UPDATE SET version = excluded.version, last_synced_date = excluded.last_synced_date;`,
             [module, version, new Date().toISOString()]
         );
     });

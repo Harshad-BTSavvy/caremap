@@ -11,7 +11,7 @@ export interface User {
 export interface SyncPatientData {
   id: string;
   patient_fhir_id: string;
-  last_synced_at: Date | null;
+  last_synced_date: Date | null;
   status: boolean;
   created_date: Date;
   updated_date: Date;
@@ -238,7 +238,7 @@ export interface TrackItemEntry {
 export interface TrackConfigVersion {
   module: string;
   version: number;
-  last_synced_at: string | null;
+  last_synced_date: string | null;
 }
 
 export interface Contact {
