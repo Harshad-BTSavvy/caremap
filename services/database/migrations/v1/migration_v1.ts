@@ -56,6 +56,7 @@ export const up = async (db: SQLiteDatabase) => {
       linked_health_system INTEGER NOT NULL DEFAULT 0,
       fhir_id TEXT UNIQUE,
       condition_name TEXT NOT NULL,
+      onset_date TEXT DEFAULT (datetime('now')),
       created_date TEXT NOT NULL DEFAULT (datetime('now')),
       updated_date TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (patient_id) REFERENCES ${tables.PATIENT}(id) ON DELETE CASCADE

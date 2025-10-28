@@ -7,6 +7,7 @@ export const PatientConditionMapper = {
         patient_id: patientId,
         linked_health_system: true,
         fhir_id: fhir.id,
-        condition_name: fhir.code?.coding?.[0].display
+        condition_name: fhir.code?.coding?.[0].display,
+        onset_date: fhir.onsetDateTime ? new Date(fhir.onsetDateTime) : undefined,
     }),
 };
