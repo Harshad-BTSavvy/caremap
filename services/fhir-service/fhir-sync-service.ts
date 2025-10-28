@@ -9,6 +9,7 @@ import { PatientConditionModel } from "@/services/database/models/PatientConditi
 import { PatientGoalModel } from "@/services/database/models/PatientGoalModel";
 import { PatientMedicationModel } from "@/services/database/models/PatientMedicationModel";
 import { SurgeryProcedureModel } from "@/services/database/models/SurgeryProcedureModel";
+import { PATIENT_FHIR_ID, PATIENT_WITH_ALLERGY, PATIENT_WITH_CONDITION, PATIENT_WITH_DISCHARGE, PATIENT_WITH_GOAL, PATIENT_WITH_HOSPITALIZATION, PATIENT_WITH_MEDICATION, PATIENT_WITH_PROCEDURE } from "@/services/fhir-service/fhir-config";
 import { logger } from "@/services/logging/logger";
 
 function getSyncAction<T>(fhirData: T | null, exists: boolean) {
@@ -34,6 +35,22 @@ function createFhirLinkedService<T>(model: BaseModel<T>) {
     };
 }
 
+const patientFhirMap: Record<string, string> = {
+    "Patient Medical Condition": PATIENT_WITH_CONDITION,
+    "Patient Allergy": PATIENT_WITH_ALLERGY,
+    "Patient Medication": PATIENT_WITH_MEDICATION,
+    "Patient Hospitalization": PATIENT_WITH_HOSPITALIZATION,
+    "Patient Surgery Procedure": PATIENT_WITH_PROCEDURE,
+    "Patient Discharge Instruction": PATIENT_WITH_DISCHARGE,
+    "Patient High Level Goal": PATIENT_WITH_GOAL,
+};
+
+// ------------------------------------------------------------------------------------------------------------
+
+const getPatientFhirIdByUseCase = (name: string): string | null => {
+    return patientFhirMap[name]?.trim() || PATIENT_FHIR_ID;
+};
+
 const PatientAllergyService = createFhirLinkedService(new PatientAllergyModel());
 const PatientConditionService = createFhirLinkedService(new PatientConditionModel());
 const PatientMedicationService = createFhirLinkedService(new PatientMedicationModel());
@@ -42,12 +59,25 @@ const PatientDischargeInstructionService = createFhirLinkedService(new Discharge
 const PatientSurgeryProcedureService = createFhirLinkedService(new SurgeryProcedureModel());
 const PatientHighLevelGoalService = createFhirLinkedService(new PatientGoalModel());
 
+// Patient Health records sync
+const resourcesToSync = [
+    { name: "Patient Medical Condition", fetch: FhirService.getPatientConditions, service: PatientConditionService },
+    { name: "Patient Allergy", fetch: FhirService.getPatientAllergies, service: PatientAllergyService },
+    { name: "Patient Medication", fetch: FhirService.getPatientMedications, service: PatientMedicationService },
+    { name: "Patient Hospitalization", fetch: FhirService.getPatientHospitalizations, service: PatientHospitalizationService },
+    { name: "Patient Surgery Procedure", fetch: FhirService.getPatientSurgeryProcedures, service: PatientSurgeryProcedureService },
+    { name: "Patient Discharge Instruction", fetch: FhirService.getPatientDischargeInstructions, service: PatientDischargeInstructionService },
+    { name: "Patient High Level Goal", fetch: FhirService.getPatientHighLevelGoals, service: PatientHighLevelGoalService },
+    // add more here in same pattern
+];
+
+// ------------------------------------------------------------------------------------------------------------
+
 export async function handleBackgroundFhirSync(patient: DbPatient) {
 
     logger.debug(`[FHIR SYNC] Starting background sync for patient ${patient.id}`);
 
     // Patient record sync
-
     const fhirPatient = await FhirService.getPatient(patient.fhir_id);
     const existingPatient = await getPatientByFhirId(patient.fhir_id);
     const patientAction = getSyncAction(fhirPatient, !!existingPatient);
@@ -64,23 +94,10 @@ export async function handleBackgroundFhirSync(patient: DbPatient) {
         await updatePatient(fhirPatient!, { fhir_id: existingPatient?.fhir_id });
     }
 
-
-    // Patient Health records sync
-
-    const resourcesToSync = [
-        { name: "Medical Condition", fetch: FhirService.getPatientConditions, service: PatientConditionService },
-        { name: "Patient Allergy", fetch: FhirService.getPatientAllergies, service: PatientAllergyService },
-        { name: "Patient Medication", fetch: FhirService.getPatientMedications, service: PatientMedicationService },
-        { name: "Patient Hospitalization", fetch: FhirService.getPatientHospitalizations, service: PatientHospitalizationService },
-        { name: "Patient Surgery Procedure", fetch: FhirService.getPatientSurgeryProcedures, service: PatientSurgeryProcedureService },
-        { name: "Patient Discharge Instruction", fetch: FhirService.getPatientDischargeInstructions, service: PatientDischargeInstructionService },
-        { name: "Patient High Level Goal", fetch: FhirService.getPatientHighLevelGoals, service: PatientHighLevelGoalService },
-        // add more here in same pattern
-    ];
-
     for (const { name, fetch, service } of resourcesToSync) {
         try {
-            const fhirItems = await fetch(patient.fhir_id, patient.id); // returns DbEntity[] | null
+            const patientFhirId = getPatientFhirIdByUseCase(name) ?? patient.fhir_id;
+            const fhirItems = await fetch(patientFhirId, patient.id); // returns DbEntity[] | null
             if (!fhirItems) {
                 logger.debug(`[FHIR SYNC][${name}] No FHIR data returned.`);
                 continue;
@@ -109,7 +126,6 @@ export async function handleBackgroundFhirSync(patient: DbPatient) {
             logger.debug(`[FHIR SYNC][${name}] Error: ${err.message}`);
         }
     }
-
 
     logger.debug(`[FHIR SYNC] Completed successfully for patient ${patient.id}`);
 }
